@@ -1,6 +1,7 @@
 # Example usages: 
 # .\SQL2CSV.ps1 -Server "your_server" -Database "your_database" -TableList "Table1,Table2,Table3" -OutputDirectory "C:\Temp"
 
+
 # accept parameters for the server, database, tables and output directory 
 param(
     [Parameter(Mandatory=$true)]
@@ -28,7 +29,12 @@ function Write-Log {
 
 # Function to clear the log file
 function Clear-Log {
-  Remove-Item ".\script_output.log" -Force
+  # check if log file exists and delete it 
+  if (Test-Path ".\script_output.log") {
+    Remove-Item ".\script_output.log"
+  }
+  # create a new log file
+  New-Item -ItemType File -Path ".\script_output.log"
 }
 
 # Function to get the total row count from the table
@@ -131,9 +137,26 @@ foreach ($Table in $Tables) {
   # Delete existing output file if it exists
   if (Test-Path $OutputCSVFile) { Remove-Item $OutputCSVFile -Force }
 
+   
+
   # Get total row count
   $rowCount = Get-TableRowCount -Server $Server -Database $Database -Table $Table
 
+  # Log some information
+  Write-Log "Export started for table $Table" 
+  Write-Log "* Source-Table Name    : $Table"
+  Write-Log "* Primary-Key          : $primaryKeyName"
+  Write-Log "* Source-RowCount      : $rowCount"  
+  Write-Log "* Target-CSV File      : $OutputCSVFile"
+
+  # if row count is 0, create csv flie with header and continue to next table
+  if ($rowCount -eq 0) {
+    Write-Log "Table $Table has no rows. Creating an empty CSV file."
+    $header = (Invoke-Sqlcmd -Query "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '$Table'" -Database $Database -Server $Server).COLUMN_NAME
+    $header -join "," | Out-File -FilePath $OutputCSVFile -Encoding UTF8
+    continue
+  }
+  
   # Get name of primary key
   $primaryKeyName = Get-PrimaryKeyName -Server $Server -Database $Database -Table $Table
 
@@ -143,16 +166,10 @@ foreach ($Table in $Tables) {
     continue
   }
 
-  # Log some information
-  Write-Log "Export started for table $Table" 
-  Write-Log "* Source-Table Name    : $Table"
-  Write-Log "* Primary-Key          : $primaryKeyName"
-  Write-Log "* Source-RowCount      : $rowCount"  
-  Write-Log "* Target-CSV File      : $OutputCSVFile"
- 
   # Loop through the table in batches
   while ($StartRow -le $rowCount) {
-    Write-Log "Exporting rows $StartRow to $($StartRow + $BatchSize - 1)"
+    $EndRow = [Math]::Min($StartRow + $BatchSize - 1, $rowCount)
+    Write-Log "Exporting rows $StartRow to $EndRow"
 
     # Construct the SQL query with the current batch's range
     $Query = "SELECT * FROM $Table ORDER BY $primaryKeyName ASC OFFSET $($StartRow - 1) ROWS FETCH NEXT $BatchSize ROWS ONLY"
@@ -165,4 +182,6 @@ foreach ($Table in $Tables) {
     # Increment the starting row for the next batch
     $StartRow += $BatchSize
   }   
+
+  Write-Log "Export completed for table $Table"
 }
