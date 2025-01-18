@@ -1,7 +1,5 @@
 # Example usages: 
-# .\sql2csv.ps1 -Server "localhost" -Database "AdventureWorks" -TableList "Person.Person,Person.Address" -OutputDirectory "C:\Temp"
-# .\SQL2CSV.ps1 -Server "your_server" -Database "your_database" -TableList "Table1,Table2,Table3" -OutputCSVFile "c:\output.csv"
-
+# .\SQL2CSV.ps1 -Server "your_server" -Database "your_database" -TableList "Table1,Table2,Table3" -OutputDirectory "C:\Temp"
 
 # accept parameters for the server, database, tables and output directory 
 param(
