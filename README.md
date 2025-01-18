@@ -1,4 +1,4 @@
-# SQL Server to CSV Exporter PowerShell Script
+# SQL Server Tables to CSV Exporter PowerShell Script
 
 This PowerShell script efficiently exports data from multiple SQL Server tables to CSV files. It utilizes connection pooling, optimized queries, and batch processing to handle large datasets.
 
