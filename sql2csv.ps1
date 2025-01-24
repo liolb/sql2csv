@@ -96,8 +96,23 @@ INNER JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE Col
 WHERE Constraint_Type = 'PRIMARY KEY'
 AND Col.Table_Name = '$Table'
 "@
-    $primaryKeyName = $Command.ExecuteScalar()
+
+    $reader = $command.ExecuteReader() 
+    $rows = @()
+    while ($reader.Read()) {
+      $row = ""
+      for ($i = 0; $i -lt $reader.FieldCount; $i++) {
+        $row += $reader.GetValue($i)
+        if ($i -lt $reader.FieldCount - 1) {
+          $row += ","
+        }
+      }
+      $rows += $row
+    }
+  
+    $primaryKeyName = $rows -join ", "
     return $primaryKeyName
+    
   }
   finally {
     if ($Connection.State -eq 'Open') { $Connection.Close() }
@@ -142,6 +157,9 @@ foreach ($Table in $Tables) {
   # Get total row count
   $rowCount = Get-TableRowCount -Server $Server -Database $Database -Table $Table
 
+  # Get name of primary key
+  $primaryKeyName = Get-PrimaryKeyName -Server $Server -Database $Database -Table $Table
+
   # Log some information
   Write-Log "Export started for table $Table" 
   Write-Log "* Source-Table Name    : $Table"
@@ -157,9 +175,6 @@ foreach ($Table in $Tables) {
     continue
   }
   
-  # Get name of primary key
-  $primaryKeyName = Get-PrimaryKeyName -Server $Server -Database $Database -Table $Table
-
   # If the table does have a primary key; if not continue to the next table
   if (-not $primaryKeyName) {
     Write-Log "Table $Table does not have a primary key. Skipping export."
