@@ -62,8 +62,8 @@ function Get-TableRowCount {
   }
 }
 
-# Function to the the name of the primary key column
-function Get-PrimaryKeyName {
+# Function to get the names of primary key columns from the table
+function Get-PrimaryKeyColumns {
   param(
     [string]$Server,
     [string]$Database,
@@ -97,22 +97,14 @@ WHERE Constraint_Type = 'PRIMARY KEY'
 AND Col.Table_Name = '$Table'
 "@
 
+    # Execute the query; this delivers a table with the primary key column names
+    # as rows (field index 0); iterate over the rows and concatenate the column names
     $reader = $command.ExecuteReader() 
     $rows = @()
-    while ($reader.Read()) {
-      $row = ""
-      for ($i = 0; $i -lt $reader.FieldCount; $i++) {
-        $row += $reader.GetValue($i)
-        if ($i -lt $reader.FieldCount - 1) {
-          $row += ","
-        }
-      }
-      $rows += $row
-    }
+    while ($reader.Read()) {$rows += $reader.GetValue(0)}
   
-    $primaryKeyName = $rows -join ", "
-    return $primaryKeyName
-    
+    $primaryKeyColumnNameCSV = $rows -join ", "
+    return $primaryKeyColumnNameCSV   
   }
   finally {
     if ($Connection.State -eq 'Open') { $Connection.Close() }
@@ -152,18 +144,16 @@ foreach ($Table in $Tables) {
   # Delete existing output file if it exists
   if (Test-Path $OutputCSVFile) { Remove-Item $OutputCSVFile -Force }
 
-   
-
   # Get total row count
   $rowCount = Get-TableRowCount -Server $Server -Database $Database -Table $Table
 
   # Get name of primary key
-  $primaryKeyName = Get-PrimaryKeyName -Server $Server -Database $Database -Table $Table
+  $primaryKeyColumns = Get-PrimaryKeyColumns -Server $Server -Database $Database -Table $Table
 
   # Log some information
   Write-Log "Export started for table $Table" 
   Write-Log "* Source-Table Name    : $Table"
-  Write-Log "* Primary-Key          : $primaryKeyName"
+  Write-Log "* Primary-Key          : $primaryKeyColumns"
   Write-Log "* Source-RowCount      : $rowCount"  
   Write-Log "* Target-CSV File      : $OutputCSVFile"
 
@@ -176,7 +166,7 @@ foreach ($Table in $Tables) {
   }
   
   # If the table does have a primary key; if not continue to the next table
-  if (-not $primaryKeyName) {
+  if (-not $primaryKeyColumns) {
     Write-Log "Table $Table does not have a primary key. Skipping export."
     continue
   }
@@ -187,7 +177,9 @@ foreach ($Table in $Tables) {
     Write-Log "Exporting rows $StartRow to $EndRow"
 
     # Construct the SQL query with the current batch's range
-    $Query = "SELECT * FROM $Table ORDER BY $primaryKeyName ASC OFFSET $($StartRow - 1) ROWS FETCH NEXT $BatchSize ROWS ONLY"
+    $Query = "SELECT * FROM $Table ORDER BY $primaryKeyColumns ASC OFFSET $($StartRow - 1) ROWS FETCH NEXT $BatchSize ROWS ONLY"
+
+    Write-Log "Query: $Query"
 
     # Execute the query 
     # Append the current batch to the CSV file
